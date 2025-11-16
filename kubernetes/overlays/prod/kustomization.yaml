@@ -1,0 +1,44 @@
+# kubernetes/overlays/prod/kustomization.yaml
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ml-platform
+
+resources:
+- ../../base
+- ../../components/mlflow
+- ../../components/api
+- ../../components/monitoring
+- ../../components/databases
+
+patchesStrategicMerge:
+- mlflow-replicas-patch.yaml
+- api-resources-patch.yaml
+
+images:
+- name: ml-model-api
+  newName: 123456789.dkr.ecr.us-west-2.amazonaws.com/ml-platform
+  newTag: v1.0.0-prod
+
+configMapGenerator:
+- name: ml-platform-config
+  behavior: merge
+  literals:
+  - ENVIRONMENT=production
+  - DOMAIN_NAME=mlplatform.company.com
+  - CLUSTER_NAME=ml-platform-prod
+
+secretGenerator:
+- name: database-credentials
+  behavior: replace
+  literals:
+  - username=mlflow_prod_user
+  - password=${PROD_DB_PASSWORD}
+  - host=${PROD_RDS_ENDPOINT}
+  - database=mlflow
+- name: aws-credentials
+  behavior: replace
+  literals:
+  - access-key-id=${PROD_AWS_ACCESS_KEY_ID}
+  - secret-access-key=${PROD_AWS_SECRET_ACCESS_KEY}

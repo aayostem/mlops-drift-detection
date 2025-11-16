@@ -1,0 +1,505 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=mlflow
+      - POSTGRES_PASSWORD=mlflow
+      - POSTGRES_DB=mlflow
+    networks:
+      - mlops-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  mlflow-tracking:
+    build:
+      context: .
+      dockerfile: infrastructure/Dockerfile.mlflow
+    ports:
+      - "5000:5000"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+    volumes:
+      - ./artifacts:/artifacts
+    networks:
+      - mlops-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  # Other services with simplified dependencies
+  prefect-server:
+    image: prefecthq/prefect:2-python3.9
+    ports:
+      - "4200:4200"
+    command: prefect server start
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+    networks:
+      - mlops-network
+    depends_on:
+      - mlflow-tracking
+    restart: unless-stopped
+
+  ml-api:
+    build:
+      context: .
+      dockerfile: infrastructure/Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+      - PREFECT_API_URL=http://prefect-server:4200/api
+    networks:
+      - mlops-network
+    depends_on:
+      - mlflow-tracking
+      - prefect-server
+    restart: unless-stopped
+
+  monitoring:
+    build:
+      context: .
+      dockerfile: infrastructure/Dockerfile.monitoring
+    ports:
+      - "8501:8501"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+    networks:
+      - mlops-network
+    depends_on:
+      - mlflow-tracking
+    restart: unless-stopped
+
+networks:
+  mlops-network:
+    driver: bridge
+# version: "3.8"
+
+# services:
+#   # PostgreSQL Database
+#   postgres:
+#     image: postgres:13
+#     environment:
+#       - POSTGRES_USER=mlflow
+#       - POSTGRES_PASSWORD=mlflow
+#       - POSTGRES_DB=mlflow
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     networks:
+#       - mlops-network
+#     healthcheck:
+#       test: ["CMD-SHELL", "pg_isready -U mlflow"]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+#     restart: unless-stopped
+
+#   # MLflow Tracking Server
+#   mlflow-tracking:
+#     build:
+#       context: .
+#       dockerfile: infrastructure/Dockerfile.mlflow
+#     ports:
+#       - "5000:5000"
+#     environment:
+#       - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+#       # Remove SQLite environment variables completely
+#     volumes:
+#       - ./artifacts:/artifacts
+#     networks:
+#       - mlops-network
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 5
+#       start_period: 60s # Give more time for PostgreSQL to be ready
+#     restart: unless-stopped
+#     command: >
+#       sh -c "echo 'Waiting for PostgreSQL...' &&
+#              until pg_isready -h postgres -p 5432; do sleep 2; done &&
+#              echo 'Starting MLflow...' &&
+#              mlflow server --backend-store-uri postgresql://mlflow:mlflow@postgres/mlflow
+#                     --default-artifact-root /artifacts
+#                     --host 0.0.0.0
+#                     --port 5000"
+
+#   # Prefect Server (simplified dependencies)
+#   prefect-server:
+#     image: prefecthq/prefect:2-python3.9
+#     ports:
+#       - "4200:4200"
+#     command: prefect server start
+#     environment:
+#       - PREFECT_API_URL=http://prefect-server:4200/api
+#       - PREFECT_SERVER_API_HOST=0.0.0.0
+#     networks:
+#       - mlops-network
+#     depends_on:
+#       - mlflow-tracking
+#     restart: unless-stopped
+
+#   # FastAPI Application
+#   ml-api:
+#     build:
+#       context: .
+#       dockerfile: infrastructure/Dockerfile.api
+#     ports:
+#       - "8000:8000"
+#     environment:
+#       - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+#       - PREFECT_API_URL=http://prefect-server:4200/api
+#       - API_HOST=0.0.0.0
+#       - API_PORT=8000
+#     networks:
+#       - mlops-network
+#     depends_on:
+#       - mlflow-tracking
+#       - prefect-server
+#     restart: unless-stopped
+
+#   # Monitoring Dashboard
+#   monitoring:
+#     build:
+#       context: .
+#       dockerfile: infrastructure/Dockerfile.monitoring
+#     ports:
+#       - "8501:8501"
+#     environment:
+#       - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+#     networks:
+#       - mlops-network
+#     depends_on:
+#       - mlflow-tracking
+#     restart: unless-stopped
+
+# networks:
+#   mlops-network:
+#     driver: bridge
+
+# volumes:
+#   postgres_data:
+# # version: "3.8"
+
+# # services:
+# #   # PostgreSQL Database
+# #   postgres:
+# #     image: postgres:13
+# #     environment:
+# #       - POSTGRES_USER=mlflow
+# #       - POSTGRES_PASSWORD=mlflow
+# #       - POSTGRES_DB=mlflow
+# #     volumes:
+# #       - postgres_data:/var/lib/postgresql/data
+# #     networks:
+# #       - mlops-network
+# #     healthcheck:
+# #       test: ["CMD-SHELL", "pg_isready -U mlflow"]
+# #       interval: 10s
+# #       timeout: 5s
+# #       retries: 5
+
+# #   # MLflow Tracking Server
+# #   mlflow-tracking:
+# #     build:
+# #       context: .
+# #       dockerfile: infrastructure/Dockerfile.mlflow
+# #     ports:
+# #       - "5000:5000"
+# #     environment:
+# #       - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+# #       - MLFLOW_BACKEND_STORE_URI=postgresql://mlflow:mlflow@postgres/mlflow
+# #       - MLFLOW_ARTIFACT_ROOT=/artifacts
+# #     volumes:
+# #       - ./artifacts:/artifacts
+# #     networks:
+# #       - mlops-network
+# #     depends_on:
+# #       postgres:
+# #         condition: service_healthy
+# #     healthcheck:
+# #       test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+# #       interval: 30s
+# #       timeout: 10s
+# #       retries: 3
+# #       start_period: 30s
+
+# #   # Prefect Server
+# #   prefect-server:
+# #     image: prefecthq/prefect:2-python3.9
+# #     ports:
+# #       - "4200:4200"
+# #     command: prefect server start
+# #     environment:
+# #       - PREFECT_API_URL=http://prefect-server:4200/api
+# #       - PREFECT_SERVER_API_HOST=0.0.0.0
+# #     networks:
+# #       - mlops-network
+# #     depends_on:
+# #       mlflow-tracking:
+# #         condition: service_healthy
+
+# #   # FastAPI Application
+# #   ml-api:
+# #     build:
+# #       context: .
+# #       dockerfile: infrastructure/Dockerfile.api
+# #     ports:
+# #       - "8000:8000"
+# #     environment:
+# #       - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+# #       - PREFECT_API_URL=http://prefect-server:4200/api
+# #       - API_HOST=0.0.0.0
+# #       - API_PORT=8000
+# #     depends_on:
+# #       mlflow-tracking:
+# #         condition: service_healthy
+# #       prefect-server:
+# #         condition: service_started
+# #     networks:
+# #       - mlops-network
+
+# #   # Monitoring Dashboard
+# #   monitoring:
+# #     build:
+# #       context: .
+# #       dockerfile: infrastructure/Dockerfile.monitoring
+# #     ports:
+# #       - "8501:8501"
+# #     environment:
+# #       - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+# #     depends_on:
+# #       mlflow-tracking:
+# #         condition: service_healthy
+# #     networks:
+# #       - mlops-network
+
+# # networks:
+# #   mlops-network:
+# #     driver: bridge
+
+# # volumes:
+# #   postgres_data:
+# # # docker-compose.yml
+# # version: "3.8"
+
+# # services:
+# #   postgres:
+# #     image: postgres:13
+# #     environment:
+# #       - POSTGRES_USER=mlflow
+# #       - POSTGRES_PASSWORD=mlflow
+# #       - POSTGRES_DB=mlflow
+# #     volumes:
+# #       - postgres_data:/var/lib/postgresql/data
+# #     networks:
+# #       - mlops-network
+
+# #   mlflow-tracking:
+# #     build:
+# #       context: .
+# #       dockerfile: infrastructure/Dockerfile.mlflow
+# #     ports:
+# #       - "5000:5000"
+# #     environment:
+# #       - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+# #       - MLFLOW_BACKEND_STORE_URI=postgresql://mlflow:mlflow@postgres/mlflow
+# #       - MLFLOW_ARTIFACT_ROOT=/artifacts
+# #     volumes:
+# #       - ./artifacts:/artifacts
+# #     networks:
+# #       - mlops-network
+# #     depends_on:
+# #       - postgres
+# #     healthcheck:
+# #       test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+# #       interval: 30s
+# #       timeout: 10s
+# #       retries: 3
+# #       start_period: 40s
+
+# #     # Prefect Server
+# #   prefect-server:
+# #     image: prefecthq/prefect:2-python3.9
+# #     ports:
+# #       - "4200:4200"
+# #     command: prefect server start
+# #     environment:
+# #       - PREFECT_API_URL=http://prefect-server:4200/api
+# #       - PREFECT_SERVER_API_HOST=0.0.0.0
+# #     networks:
+# #       - mlops-network
+# #     depends_on:
+# #       mlflow-tracking:
+# #         condition: service_healthy
+
+# #   # FastAPI Application
+# #   ml-api:
+# #     build:
+# #       context: .
+# #       dockerfile: infrastructure/Dockerfile.api
+# #     ports:
+# #       - "8000:8000"
+# #     environment:
+# #       - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+# #       - PREFECT_API_URL=http://prefect-server:4200/api
+# #       - API_HOST=0.0.0.0
+# #       - API_PORT=8000
+# #     depends_on:
+# #       mlflow-tracking:
+# #         condition: service_healthy
+# #       prefect-server:
+# #         condition: service_started
+# #     networks:
+# #       - mlops-network
+# #     healthcheck:
+# #       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+# #       interval: 30s
+# #       timeout: 10s
+# #       retries: 3
+
+# #   # Monitoring Dashboard
+# #   monitoring:
+# #     build:
+# #       context: .
+# #       dockerfile: infrastructure/Dockerfile.monitoring
+# #     ports:
+# #       - "8501:8501"
+# #     environment:
+# #       - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+# #     depends_on:
+# #       mlflow-tracking:
+# #         condition: service_healthy
+# #     networks:
+# #       - mlops-network
+
+# # networks:
+# #   mlops-network:
+# #     driver: bridge
+
+# # volumes:
+# #   postgres_data:
+# # # version: "3.8"
+
+# # # services:
+# # #   # MLflow Tracking Server
+# # #   mlflow-tracking:
+# # #     build:
+# # #       context: .
+# # #       dockerfile: infrastructure/Dockerfile.mlflow
+# # #     ports:
+# # #       - "5000:5000"
+# # #     environment:
+# # #       - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+# # #       - MLFLOW_BACKEND_STORE_URI=sqlite:////mlflow/mlflow.db # Absolute path with 4 slashes
+# # #       - MLFLOW_ARTIFACT_ROOT=/artifacts
+# # #     volumes:
+# # #       - ./mlflow-data:/mlflow # Bind mount for better permission handling
+# # #       - ./artifacts:/artifacts
+# # #     networks:
+# # #       - mlops-network
+# # #     healthcheck:
+# # #       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+# # #       interval: 30s
+# # #       timeout: 10s
+# # #       retries: 3
+# # #     user: "${UID:-1000}:${GID:-1000}" # Add user to fix permission issues
+
+# # #   # mlflow-tracking:
+# # #   #   build:
+# # #   #     context: .
+# # #   #     dockerfile: infrastructure/Dockerfile.mlflow
+# # #   #   ports:
+# # #   #     - "5000:5000"
+# # #   #   environment:
+# # #   #     - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+# # #   #     - MLFLOW_BACKEND_STORE_URI=sqlite:///mlruns/mlflow.db
+# # #   #     - MLFLOW_ARTIFACT_ROOT=file:///artifacts
+# # #   #   volumes:
+# # #   #     - mlruns:/mlruns
+# # #   #     - artifacts:/artifacts
+# # #   #   networks:
+# # #   #     - mlops-network
+# # #   #   healthcheck:
+# # #   #     test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+# # #   #     interval: 30s
+# # #   #     timeout: 10s
+# # #   #     retries: 3
+
+# # #   # Prefect Server
+# # #   prefect-server:
+# # #     image: prefecthq/prefect:2-python3.9
+# # #     ports:
+# # #       - "4200:4200"
+# # #     command: prefect server start
+# # #     environment:
+# # #       - PREFECT_API_URL=http://prefect-server:4200/api
+# # #       - PREFECT_SERVER_API_HOST=0.0.0.0
+# # #     networks:
+# # #       - mlops-network
+# # #     depends_on:
+# # #       mlflow-tracking:
+# # #         condition: service_healthy
+
+# # #   # FastAPI Application
+# # #   ml-api:
+# # #     build:
+# # #       context: .
+# # #       dockerfile: infrastructure/Dockerfile.api
+# # #     ports:
+# # #       - "8000:8000"
+# # #     environment:
+# # #       - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+# # #       - PREFECT_API_URL=http://prefect-server:4200/api
+# # #       - API_HOST=0.0.0.0
+# # #       - API_PORT=8000
+# # #     depends_on:
+# # #       mlflow-tracking:
+# # #         condition: service_healthy
+# # #       prefect-server:
+# # #         condition: service_started
+# # #     networks:
+# # #       - mlops-network
+# # #     healthcheck:
+# # #       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+# # #       interval: 30s
+# # #       timeout: 10s
+# # #       retries: 3
+
+# # #   # Monitoring Dashboard
+# # #   monitoring:
+# # #     build:
+# # #       context: .
+# # #       dockerfile: infrastructure/Dockerfile.monitoring
+# # #     ports:
+# # #       - "8501:8501"
+# # #     environment:
+# # #       - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+# # #     depends_on:
+# # #       mlflow-tracking:
+# # #         condition: service_healthy
+# # #     networks:
+# # #       - mlops-network
+
+# # # networks:
+# # #   mlops-network:
+# # #     driver: bridge
+# # # # volumes:
+# # # #   mlruns:
+# # # #   artifacts:

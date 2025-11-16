@@ -1,0 +1,132 @@
+# config/platform-config.yaml
+
+# Platform-wide configuration
+platform:
+  name: "mlops-drift-detection-platform"
+  version: "1.0.0"
+  environment: "production"
+  region: "us-west-2"
+  
+  # Multi-cloud configuration
+  clouds:
+    aws:
+      enabled: true
+      regions: ["us-west-2", "us-east-1"]
+      eks_cluster_name: "ml-platform-prod"
+    gcp:
+      enabled: false
+      regions: ["us-central1"]
+    azure:
+      enabled: false
+      regions: ["eastus2"]
+
+# ML Platform Components
+components:
+  mlflow:
+    enabled: true
+    version: "2.8.1"
+    database:
+      type: "postgresql"
+      instance: "db.r5.large"
+    storage:
+      type: "s3"
+      bucket: "ml-platform-mlflow"
+      
+  feature_store:
+    enabled: true
+    type: "feast"
+    version: "0.31.0"
+    online_store:
+      type: "redis"
+    offline_store:
+      type: "s3"
+      
+  model_serving:
+    enabled: true
+    framework: "fastapi"
+    version: "0.104.0"
+    autoscaling:
+      min_replicas: 3
+      max_replicas: 20
+      target_cpu: 70
+      
+  monitoring:
+    enabled: true
+    stack:
+      prometheus: true
+      grafana: true
+      alertmanager: true
+      loki: true
+      tempo: true
+      
+  security:
+    enabled: true
+    components:
+      vault: true
+      opa: true
+      cert_manager: true
+      network_policies: true
+
+# Drift Detection Configuration
+drift_detection:
+  enabled: true
+  methods:
+    - "statistical"
+    - "model_based"
+    - "domain_adaptation"
+  schedule: "0 */6 * * *"  # Every 6 hours
+  thresholds:
+    warning: 0.3
+    critical: 0.7
+  auto_retrain: true
+  retrain_threshold: 0.8
+
+# Model Registry Configuration
+model_registry:
+  type: "mlflow"
+  stages:
+    - "None"
+    - "Staging"
+    - "Production"
+    - "Archived"
+  auto_promotion: true
+  promotion_criteria:
+    - "accuracy > 0.85"
+    - "drift_score < 0.3"
+    - "latency_p95 < 1.0"
+
+# Cost Optimization
+cost_optimization:
+  enabled: true
+  strategies:
+    - "spot_instances"
+    - "auto_scaling"
+    - "resource_rightsizing"
+  budget_alerts:
+    monthly_budget: 10000
+    warning_threshold: 0.8
+    critical_threshold: 0.95
+
+# GitOps Configuration
+gitops:
+  enabled: true
+  tool: "argocd"
+  sync_policy:
+    automated:
+      prune: true
+      selfHeal: true
+    sync_options:
+      - "CreateNamespace=true"
+  source_repos:
+    - "https://github.com/your-org/mlops-drift-detection-platform"
+
+# Backup & Disaster Recovery
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention_days: 30
+  components:
+    - "databases"
+    - "model_artifacts"
+    - "feature_store"
+    - "configurations"

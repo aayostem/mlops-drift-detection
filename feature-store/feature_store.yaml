@@ -1,0 +1,12 @@
+# feature-store/feature_store.yaml
+
+project: ml_platform
+registry: s3://ml-platform-feast-registry/registry.db
+provider: aws
+online_store:
+  type: redis
+  connection_string: "${REDIS_URL}"
+offline_store:
+  type: file
+
+entity_key_serialization_version: 2

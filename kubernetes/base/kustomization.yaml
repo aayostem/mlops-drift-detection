@@ -1,0 +1,39 @@
+# kubernetes/base/kustomization.yaml
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ml-platform
+
+resources:
+- namespaces.yaml
+- rbac.yaml
+- configmaps.yaml
+- secrets.yaml
+
+commonLabels:
+  app: ml-platform
+  environment: base
+  managed-by: kustomize
+
+generatorOptions:
+  disableNameSuffixHash: false
+
+configMapGenerator:
+- name: ml-platform-config
+  literals:
+  - APP_ENV=production
+  - LOG_LEVEL=INFO
+  - MLFLOW_TRACKING_URI=http://mlflow-service.mlflow:5000
+
+secretGenerator:
+- name: database-credentials
+  literals:
+  - username=mlflow_user
+  - password=change_this_in_overlays
+  - host=postgresql.ml-platform.svc.cluster.local
+  - database=mlflow
+- name: aws-credentials
+  literals:
+  - access-key-id=AKIA...
+  - secret-access-key=change_this_in_overlays

@@ -1,0 +1,12 @@
+# Performance optimizations:
+- Model caching with Redis
+- Request batching for GPU inference
+- Async processing for non-critical paths
+- Connection pooling for database access
+- Circuit breakers for dependent services
+
+# Resource optimization:
+- Vertical Pod Autoscaler for right-sizing
+- Horizontal Pod Autoscaler for load-based scaling
+- Node affinity for GPU workloads
+- Resource quotas for cost control

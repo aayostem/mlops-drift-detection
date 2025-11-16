@@ -1,0 +1,36 @@
+# argo-cd/applications/mlflow.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mlflow
+  namespace: argocd
+  labels:
+    component: model-registry
+    team: ml-platform
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: ml-platform-alerts
+spec:
+  project: ml-platform
+  source:
+    repoURL: https://github.com/your-org/mlops-drift-detection-platform.git
+    targetRevision: main
+    path: kubernetes/components/mlflow
+    helm:
+      valueFiles:
+      - values/prod.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlflow
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+  healthChecks:
+  - apiVersion: apps/v1
+    kind: Deployment
+    name: mlflow-tracking-server
+    namespace: mlflow

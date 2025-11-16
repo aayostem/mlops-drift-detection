@@ -1,0 +1,164 @@
+{
+    "dashboard": {
+        "title": "ML Platform Overview",
+        "tags": [
+            "mlops",
+            "monitoring",
+            "drift-detection"
+        ],
+        "timezone": "browser",
+        "panels": [
+            {
+                "id": 1,
+                "title": "Model Performance Overview",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "job:model_accuracy:avg",
+                        "legendFormat": "{{model_name}}"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "thresholds"
+                        },
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "red",
+                                    "value": 0.8
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 0.9
+                                },
+                                {
+                                    "color": "green",
+                                    "value": 0.95
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                "id": 2,
+                "title": "Data Drift Score",
+                "type": "gauge",
+                "targets": [
+                    {
+                        "expr": "drift_score",
+                        "legendFormat": "Drift Score"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "min": 0,
+                        "max": 1,
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 0.3
+                                },
+                                {
+                                    "color": "red",
+                                    "value": 0.7
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                "id": 3,
+                "title": "Model Inference Latency (P95)",
+                "type": "timeseries",
+                "targets": [
+                    {
+                        "expr": "job:model_inference_duration_seconds:p95",
+                        "legendFormat": "{{model_name}}"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "s",
+                        "color": {
+                            "mode": "palette-classic"
+                        }
+                    }
+                }
+            },
+            {
+                "id": 4,
+                "title": "Prediction Throughput",
+                "type": "timeseries",
+                "targets": [
+                    {
+                        "expr": "rate(model_predictions_total[5m])",
+                        "legendFormat": "{{model_name}}"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "reqps",
+                        "color": {
+                            "mode": "palette-classic"
+                        }
+                    }
+                }
+            },
+            {
+                "id": 5,
+                "title": "Feature Drift Scores",
+                "type": "barchart",
+                "targets": [
+                    {
+                        "expr": "feature_drift_score",
+                        "legendFormat": "{{feature_name}}"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "palette-classic"
+                        }
+                    }
+                }
+            },
+            {
+                "id": 6,
+                "title": "Resource Utilization",
+                "type": "timeseries",
+                "targets": [
+                    {
+                        "expr": "job:container_memory_utilization:ratio",
+                        "legendFormat": "Memory - {{pod}}"
+                    },
+                    {
+                        "expr": "job:container_cpu_utilization:ratio",
+                        "legendFormat": "CPU - {{pod}}"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "percentunit",
+                        "color": {
+                            "mode": "palette-classic"
+                        }
+                    }
+                }
+            }
+        ],
+        "time": {
+            "from": "now-1h",
+            "to": "now"
+        },
+        "refresh": "30s"
+    }
+}

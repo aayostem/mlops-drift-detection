@@ -1,0 +1,38 @@
+# infrastructure/Dockerfile.mlflow.enhanced
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements-docker.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements-docker.txt
+
+# Create directories
+RUN mkdir -p /mlruns /artifacts /logs
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash mlflow
+USER mlflow
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
+
+EXPOSE 5000
+
+# Start MLflow server with environment-based configuration
+CMD ["sh", "-c", \
+    "mlflow server \
+    --host 0.0.0.0 \
+    --port 5000 \
+    --backend-store-uri ${MLFLOW_BACKEND_STORE_URI:-sqlite:///mlruns/mlflow.db} \
+    --default-artifact-root ${MLFLOW_ARTIFACT_ROOT:-file:///artifacts} \
+    --gunicorn-opts '--log-level info --access-logfile - --error-logfile -'"]

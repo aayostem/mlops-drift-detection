@@ -1,0 +1,143 @@
+# kubernetes/components/security/vault.yaml
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app: vault
+    component: security
+spec:
+  serviceName: vault
+  replicas: 3
+  selector:
+    matchLabels:
+      app: vault
+      component: security
+  template:
+    metadata:
+      labels:
+        app: vault
+        component: security
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "ml-platform"
+        vault.hashicorp.com/agent-inject-status: "update"
+    spec:
+      serviceAccountName: vault
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: vault
+        image: vault:1.14.0
+        args:
+        - server
+        - -config=/vault/config/vault-config.hcl
+        ports:
+        - containerPort: 8200
+          name: http
+        - containerPort: 8201
+          name: cluster
+        env:
+        - name: VAULT_ADDR
+          value: "https://127.0.0.1:8200"
+        - name: VAULT_API_ADDR
+          value: "https://vault.ml-platform.svc.cluster.local:8200"
+        - name: VAULT_CLUSTER_ADDR
+          value: "https://vault.ml-platform.svc.cluster.local:8201"
+        - name: VAULT_SKIP_VERIFY
+          value: "true"
+        volumeMounts:
+        - name: config
+          mountPath: /vault/config
+        - name: data
+          mountPath: /vault/data
+        - name: certs
+          mountPath: /vault/certs
+          readOnly: true
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /v1/sys/health
+            port: 8200
+            scheme: HTTPS
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /v1/sys/health
+            port: 8200
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: vault-config
+      - name: certs
+        secret:
+          secretName: vault-tls
+      - name: data
+        persistentVolumeClaim:
+          claimName: vault-data
+  volumeClaimTemplates:
+  - metadata:
+      name: vault-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: gp2
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault-service
+  namespace: vault
+spec:
+  selector:
+    app: vault
+    component: security
+  ports:
+  - port: 8200
+    targetPort: 8200
+    name: http
+  - port: 8201
+    targetPort: 8201
+    name: cluster
+  type: ClusterIP
+
+---
+# Vault Agent Sidecar Injector
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: vault-agent-injector-cfg
+  labels:
+    app: vault-agent-injector
+webhooks:
+- name: vault.hashicorp.com
+  clientConfig:
+    service:
+      name: vault-agent-injector-svc
+      namespace: vault
+      path: /mutate
+    caBundle: ${CA_BUNDLE}
+  rules:
+  - operations: [ "CREATE" ]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+  failurePolicy: Ignore
+  sideEffects: None

@@ -1,0 +1,167 @@
+# tekton/pipelines/ml-training-pipeline.yaml
+
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: ml-training-pipeline
+  namespace: tekton-pipelines
+  labels:
+    app.kubernetes.io/version: "1.0"
+    pipeline-type: ml-training
+spec:
+  workspaces:
+  - name: shared-data
+    description: Workspace for sharing data between tasks
+  - name: model-artifacts
+    description: Workspace for storing model artifacts
+  - name: docker-config
+    description: Workspace for Docker configuration
+  
+  params:
+  - name: training-data-url
+    type: string
+    description: URL to training data
+    default: "s3://ml-platform-data/training/"
+  - name: model-name
+    type: string
+    description: Name of the model to train
+  - name: model-version
+    type: string
+    description: Version of the model
+  - name: experiment-name
+    type: string
+    description: MLflow experiment name
+    default: "production"
+  - name: accuracy-threshold
+    type: string
+    description: Minimum accuracy threshold for deployment
+    default: "0.85"
+
+  tasks:
+  # Data Validation Task
+  - name: validate-data
+    taskRef:
+      name: data-validation
+    workspaces:
+    - name: source
+      workspace: shared-data
+    params:
+    - name: data-url
+      value: "$(params.training-data-url)"
+    - name: validation-rules
+      value: "data_validation_rules.yaml"
+
+  # Feature Engineering Task
+  - name: engineer-features
+    runAfter: ["validate-data"]
+    taskRef:
+      name: feature-engineering
+    workspaces:
+    - name: source
+      workspace: shared-data
+    - name: features
+      workspace: shared-data
+    params:
+    - name: input-data
+      value: "$(params.training-data-url)"
+    - name: feature-config
+      value: "feature_config.yaml"
+
+  # Model Training Task
+  - name: train-model
+    runAfter: ["engineer-features"]
+    taskRef:
+      name: model-training
+    workspaces:
+    - name: source
+      workspace: shared-data
+    - name: artifacts
+      workspace: model-artifacts
+    - name: docker-config
+      workspace: docker-config
+    params:
+    - name: experiment-name
+      value: "$(params.experiment-name)"
+    - name: model-name
+      value: "$(params.model-name)"
+    - name: model-version
+      value: "$(params.model-version)"
+    - name: mlflow-tracking-uri
+      value: "http://mlflow-service.mlflow:5000"
+
+  # Model Evaluation Task
+  - name: evaluate-model
+    runAfter: ["train-model"]
+    taskRef:
+      name: model-evaluation
+    workspaces:
+    - name: artifacts
+      workspace: model-artifacts
+    - name: source
+      workspace: shared-data
+    params:
+    - name: model-uri
+      value: "$(tasks.train-model.results.model-uri)"
+    - name: test-data
+      value: "$(params.training-data-url)/test/"
+    - name: accuracy-threshold
+      value: "$(params.accuracy-threshold)"
+
+  # Security Scan Task
+  - name: security-scan
+    runAfter: ["train-model"]
+    taskRef:
+      name: security-scan
+    workspaces:
+    - name: artifacts
+      workspace: model-artifacts
+    params:
+    - name: model-path
+      value: "$(tasks.train-model.results.model-path)"
+
+  # Model Registration Task
+  - name: register-model
+    runAfter: ["evaluate-model", "security-scan"]
+    taskRef:
+      name: model-registration
+    workspaces:
+    - name: artifacts
+      workspace: model-artifacts
+    params:
+    - name: model-uri
+      value: "$(tasks.train-model.results.model-uri)"
+    - name: model-name
+      value: "$(params.model-name)"
+    - name: model-version
+      value: "$(params.model-version)"
+    - name: stage
+      value: "Staging"
+    - name: description
+      value: "Automatically trained model version $(params.model-version)"
+
+  # Drift Detection Baseline Task
+  - name: update-drift-baseline
+    runAfter: ["register-model"]
+    taskRef:
+      name: update-drift-baseline
+    workspaces:
+    - name: artifacts
+      workspace: model-artifacts
+    params:
+    - name: model-version
+      value: "$(params.model-version)"
+    - name: reference-data
+      value: "$(params.training-data-url)"
+
+  # Notification Task
+  - name: send-notification
+    runAfter: ["register-model"]
+    taskRef:
+      name: send-slack-notification
+    params:
+    - name: message
+      value: "Model $(params.model-name) v$(params.model-version) training completed with accuracy $(tasks.evaluate-model.results.accuracy)"
+    - name: webhook-url
+      value: "$(slack-webhook-url)"
+    - name: status
+      value: "$(tasks.evaluate-model.results.status)"

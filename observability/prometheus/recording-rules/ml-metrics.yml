@@ -1,0 +1,44 @@
+# observability/prometheus/recording-rules/ml-metrics.yml
+
+groups:
+- name: ml-metrics-recording
+  interval: 30s
+  rules:
+  
+  # Model Performance Aggregations
+  - record: job:model_accuracy:avg
+    expr: avg by (job, model_name, version) (model_accuracy)
+    labels:
+      type: performance
+  
+  - record: job:model_inference_duration_seconds:p95
+    expr: histogram_quantile(0.95, sum by (le, job) (rate(model_inference_duration_seconds_bucket[5m])))
+    labels:
+      type: performance
+  
+  - record: job:model_predictions:rate5m
+    expr: sum by (job) (rate(model_predictions_total[5m]))
+    labels:
+      type: throughput
+  
+  # Data Quality Metrics
+  - record: job:data_drift_score:max
+    expr: max by (job) (drift_score)
+    labels:
+      type: data-quality
+  
+  - record: job:feature_drift_scores:avg
+    expr: avg by (job) (feature_drift_score)
+    labels:
+      type: data-quality
+  
+  # Resource Utilization
+  - record: job:container_memory_utilization:ratio
+    expr: container_memory_usage_bytes / container_spec_memory_limit_bytes
+    labels:
+      type: resource
+  
+  - record: job:container_cpu_utilization:ratio
+    expr: rate(container_cpu_usage_seconds_total[5m]) / container_spec_cpu_quota
+    labels:
+      type: resource

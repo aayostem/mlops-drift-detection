@@ -1,0 +1,73 @@
+# observability/prometheus/prometheus-values.yaml
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+ruleFiles:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+  - static_configs:
+    - targets:
+      - alertmanager.monitoring:9093
+
+scrape_configs:
+  - job_name: 'ml-model-api'
+    kubernetes_sd_configs:
+    - role: endpoints
+      namespaces:
+        names:
+        - ml-platform
+    relabel_configs:
+    - source_labels: [__meta_kubernetes_service_label_app]
+      action: keep
+      regex: ml-model-api
+    - source_labels: [__meta_kubernetes_endpoint_port_name]
+      action: keep
+      regex: metrics
+    metric_relabel_configs:
+    - source_labels: [__address__]
+      target_label: instance
+    - source_labels: [__meta_kubernetes_pod_name]
+      target_label: pod
+
+  - job_name: 'mlflow'
+    kubernetes_sd_configs:
+    - role: endpoints
+      namespaces:
+        names:
+        - mlflow
+    relabel_configs:
+    - source_labels: [__meta_kubernetes_service_label_app]
+      action: keep
+      regex: mlflow
+
+  - job_name: 'drift-detector'
+    static_configs:
+    - targets: ['drift-detector.ml-platform:8080']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  - job_name: 'feature-store'
+    static_configs:
+    - targets: ['feature-store.ml-platform:8080']
+    metrics_path: /metrics
+
+  - job_name: 'blackbox-exporter'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+    - targets:
+      - https://api.mlplatform.company.com/health
+      - https://mlflow.mlplatform.company.com/health
+      - https://grafana.mlplatform.company.com/api/health
+    relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: blackbox-exporter.monitoring:9115

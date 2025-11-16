@@ -1,0 +1,19 @@
+# environment.yml
+name: mlops-drift-detection
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - pip
+  - jupyter
+  - jupyterlab
+  - nodejs  # for JupyterLab extensions
+  
+  # Complex dependencies that conda handles better
+  - tensorflow=2.13.0  # if you add deep learning later
+  - pytorch=2.0.1      # if you add PyTorch models
+  - cudatoolkit=11.8   # GPU support
+  
+  - pip:
+    - -e .[dev,notebooks]  # Install your package with extras

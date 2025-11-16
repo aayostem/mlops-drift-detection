@@ -1,0 +1,145 @@
+# kubernetes/components/monitoring/prometheus/configmap.yaml
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: '${CLUSTER_NAME}'
+        environment: '${ENVIRONMENT}'
+
+    rule_files:
+      - "/etc/prometheus/rules/*.yml"
+
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      - job_name: 'kubernetes-apiservers'
+        kubernetes_sd_configs:
+        - role: endpoints
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+        - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+          action: keep
+          regex: default;kubernetes;https
+
+      - job_name: 'ml-model-api'
+        kubernetes_sd_configs:
+        - role: endpoints
+          namespaces:
+            names:
+            - ml-platform
+        relabel_configs:
+        - source_labels: [__meta_kubernetes_service_label_app]
+          action: keep
+          regex: ml-model-api
+        - source_labels: [__meta_kubernetes_endpoint_port_name]
+          action: keep
+          regex: metrics
+
+      - job_name: 'mlflow'
+        kubernetes_sd_configs:
+        - role: endpoints
+          namespaces:
+            names:
+            - mlflow
+        relabel_configs:
+        - source_labels: [__meta_kubernetes_service_label_app]
+          action: keep
+          regex: mlflow
+        - source_labels: [__meta_kubernetes_endpoint_port_name]
+          action: keep
+          regex: http
+
+      - job_name: 'kubernetes-nodes'
+        kubernetes_sd_configs:
+        - role: node
+        relabel_configs:
+        - action: labelmap
+          regex: __meta_kubernetes_node_label_(.+)
+        - target_label: __address__
+          replacement: kubernetes.default.svc:443
+        - source_labels: [__meta_kubernetes_node_name]
+          regex: (.+)
+          target_label: __metrics_path__
+          replacement: /api/v1/nodes/${1}/proxy/metrics
+
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+        - role: pod
+        relabel_configs:
+        - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+          action: keep
+          regex: true
+        - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+          action: replace
+          target_label: __metrics_path__
+          regex: (.+)
+        - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+          action: replace
+          regex: ([^:]+)(?::\d+)?;(\d+)
+          replacement: $1:$2
+          target_label: __address__
+        - action: labelmap
+          regex: __meta_kubernetes_pod_label_(.+)
+        - source_labels: [__meta_kubernetes_namespace]
+          action: replace
+          target_label: kubernetes_namespace
+        - source_labels: [__meta_kubernetes_pod_name]
+          action: replace
+          target_label: kubernetes_pod_name
+
+  rules.yml: |
+    groups:
+    - name: ml-platform-alerts
+      rules:
+      - alert: HighModelAPILatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="ml-model-api"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: model-api
+        annotations:
+          summary: "High latency detected in model API"
+          description: "Model API p95 latency is {{ $value }} seconds"
+
+      - alert: ModelAPIDown
+        expr: up{job="ml-model-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: model-api
+        annotations:
+          summary: "Model API is down"
+          description: "Model API has been down for more than 2 minutes"
+
+      - alert: HighMemoryUsage
+        expr: (container_memory_usage_bytes{container="model-api"} / container_spec_memory_limit_bytes{container="model-api"}) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: model-api
+        annotations:
+          summary: "High memory usage in model API"
+          description: "Memory usage is {{ $value | humanizePercentage }} of limit"
+
+      - alert: DriftDetectionAlert
+        expr: drift_score > 0.8
+        for: 10m
+        labels:
+          severity: critical
+          component: drift-detection
+        annotations:
+          summary: "High data drift detected"
+          description: "Data drift score {{ $value }} exceeds threshold for 10 minutes"

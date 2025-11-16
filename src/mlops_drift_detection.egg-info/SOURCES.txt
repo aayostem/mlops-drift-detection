@@ -1,0 +1,12 @@
+README.md
+pyproject.toml
+src/config/settings.py
+src/data/pipeline.py
+src/mlops_drift_detection.egg-info/PKG-INFO
+src/mlops_drift_detection.egg-info/SOURCES.txt
+src/mlops_drift_detection.egg-info/dependency_links.txt
+src/mlops_drift_detection.egg-info/entry_points.txt
+src/mlops_drift_detection.egg-info/requires.txt
+src/mlops_drift_detection.egg-info/top_level.txt
+src/model/training.py
+src/pipeline/training_pipeline.py

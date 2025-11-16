@@ -1,0 +1,20 @@
+# kubernetes/overlays/prod/mlflow-replicas-patch.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow-tracking-server
+  namespace: mlflow
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: mlflow-server
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"

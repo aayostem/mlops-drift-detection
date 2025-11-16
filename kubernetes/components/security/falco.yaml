@@ -1,0 +1,89 @@
+# kubernetes/components/security/falco.yaml
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: falco
+  namespace: falco
+spec:
+  selector:
+    matchLabels:
+      app: falco
+  template:
+    metadata:
+      labels:
+        app: falco
+    spec:
+      hostNetwork: true
+      hostPID: true
+      containers:
+      - name: falco
+        image: falcosecurity/falco:0.35.0
+        args:
+        - /usr/bin/falco
+        - --cri
+        - /run/containerd/containerd.sock
+        - -K
+        - /var/run/secrets/kubernetes.io/serviceaccount/token
+        - -k
+        - https://$(KUBERNETES_SERVICE_HOST)
+        - -pk
+        securityContext:
+          privileged: true
+          allowPrivilegeEscalation: true
+        volumeMounts:
+        - name: proc
+          mountPath: /host/proc
+          readOnly: true
+        - name: dev
+          mountPath: /host/dev
+          readOnly: true
+        - name: etc
+          mountPath: /host/etc
+          readOnly: true
+        - name: sys
+          mountPath: /host/sys
+          readOnly: true
+        - name: modules
+          mountPath: /host/usr/src
+          readOnly: true
+        - name: lib-modules
+          mountPath: /host/lib/modules
+          readOnly: true
+        - name: os-release
+          mountPath: /host/etc/os-release
+          readOnly: true
+        - name: falco-config
+          mountPath: /etc/falco
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: proc
+        hostPath:
+          path: /proc
+      - name: dev
+        hostPath:
+          path: /dev
+      - name: etc
+        hostPath:
+          path: /etc
+      - name: sys
+        hostPath:
+          path: /sys
+      - name: modules
+        hostPath:
+          path: /usr/src
+      - name: lib-modules
+        hostPath:
+          path: /lib/modules
+      - name: os-release
+        hostPath:
+          path: /etc/os-release
+      - name: falco-config
+        configMap:
+          name: falco-config

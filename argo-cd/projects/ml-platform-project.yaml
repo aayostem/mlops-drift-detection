@@ -1,0 +1,61 @@
+# argo-cd/projects/ml-platform-project.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: ml-platform
+  namespace: argocd
+  labels:
+    project: ml-platform
+spec:
+  description: MLOps Platform Project
+  sourceRepos:
+  - 'https://github.com/your-org/mlops-drift-detection-platform.git'
+  - 'https://github.com/your-org/ml-models.git'
+  destinations:
+  - namespace: ml-platform
+    server: https://kubernetes.default.svc
+  - namespace: mlflow
+    server: https://kubernetes.default.svc
+  - namespace: monitoring
+    server: https://kubernetes.default.svc
+  - namespace: '*'
+    server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+  - group: ''
+    kind: Namespace
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRoleBinding
+  - group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'
+  roles:
+  - name: ml-platform-admin
+    description: ML Platform Admin
+    policies:
+    - p, proj:ml-platform:ml-platform-admin, applications, get, ml-platform/*, allow
+    - p, proj:ml-platform:ml-platform-admin, applications, sync, ml-platform/*, allow
+    - p, proj:ml-platform:ml-platform-admin, applications, update, ml-platform/*, allow
+    groups:
+    - ml-platform-admins
+  syncWindows:
+  - kind: allow
+    schedule: '10 2 * * *'
+    duration: 1h
+    applications:
+    - 'ml-platform-*'
+    namespaces:
+    - ml-platform
+    - mlflow
+  - kind: deny
+    schedule: '* * * * *'
+    applications:
+    - '*-prod'
+    namespaces:
+    - production
+    clusters:
+    - production

@@ -1,0 +1,47 @@
+# argo-cd/applications/ml-platform.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ml-platform
+  namespace: argocd
+  labels:
+    environment: production
+    team: ml-platform
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: ml-platform
+  source:
+    repoURL: https://github.com/your-org/mlops-drift-detection-platform.git
+    targetRevision: main
+    path: kubernetes/overlays/prod
+    kustomize:
+      images:
+      - name: ml-model-api
+        newName: 123456789.dkr.ecr.us-west-2.amazonaws.com/ml-platform
+        newTag: latest
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ml-platform
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - PruneLast=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        maxDuration: 2m
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas
+  - group: autoscaling
+    kind: HorizontalPodAutoscaler
+    jsonPointers:
+    - /spec

@@ -1,0 +1,32 @@
+# opa/constraints/resource-limits.yaml
+
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredResourceLimits
+metadata:
+  name: ml-platform-resource-limits
+spec:
+  match:
+    namespaces: ["ml-platform", "mlflow"]
+    kinds:
+    - apiGroups: ["apps"]
+      kinds: ["Deployment", "StatefulSet"]
+  parameters:
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+    requests:
+      cpu: "50m" 
+      memory: "64Mi"
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sMaxReplicas
+metadata:
+  name: ml-platform-max-replicas
+spec:
+  match:
+    namespaces: ["ml-platform"]
+    kinds:
+    - apiGroups: ["apps"]
+      kinds: ["Deployment"]
+  parameters:
+    maxReplicas: 20

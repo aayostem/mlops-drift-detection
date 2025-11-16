@@ -1,0 +1,90 @@
+# kubernetes/components/monitoring/custom-metrics/custom-metrics.yaml
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: custom-metrics-config
+  namespace: monitoring
+data:
+  config.yaml: |
+    rules:
+    - seriesQuery: 'http_requests_total{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^(.*)_total$"
+        as: "${1}_per_second"
+      metricsQuery: 'sum(rate(<<.Series>>{<<.LabelMatchers>>}[2m])) by (<<.GroupBy>>)'
+    
+    - seriesQuery: 'model_inference_latency_seconds{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "model_inference_latency_seconds"
+        as: "model_inference_latency_seconds_p95"
+      metricsQuery: 'histogram_quantile(0.95, sum(rate(<<.Series>>_bucket{<<.LabelMatchers>>}[5m])) by (le, <<.GroupBy>>))'
+    
+    - seriesQuery: 'drift_score{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "drift_score"
+        as: "drift_score"
+      metricsQuery: '<<.Series>>{<<.LabelMatchers>>}'
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: custom-metrics-apiserver
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: custom-metrics-apiserver
+  template:
+    metadata:
+      labels:
+        app: custom-metrics-apiserver
+    spec:
+      serviceAccountName: custom-metrics-apiserver
+      containers:
+      - name: custom-metrics-apiserver
+        image: directxman12/k8s-prometheus-adapter:v0.9.0
+        args:
+        - --secure-port=6443
+        - --tls-cert-file=/var/run/serving-cert/tls.crt
+        - --tls-private-key-file=/var/run/serving-cert/tls.key
+        - --logtostderr=true
+        - --prometheus-url=http://prometheus-service.monitoring:9090
+        - --metrics-relist-interval=1m
+        - --v=6
+        - --config=/etc/adapter/config.yaml
+        ports:
+        - containerPort: 6443
+        volumeMounts:
+        - mountPath: /var/run/serving-cert
+          name: serving-cert
+        - mountPath: /etc/adapter
+          name: config
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      volumes:
+      - name: serving-cert
+        secret:
+          secretName: custom-metrics-apiserver-cert
+      - name: config
+        configMap:
+          name: custom-metrics-config

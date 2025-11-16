@@ -1,0 +1,89 @@
+# docker-compose.prod.yml
+version: "3.8"
+
+services:
+  # MLflow Tracking Server
+  mlflow-tracking:
+    build:
+      context: .
+      dockerfile: infrastructure/Dockerfile.mlflow
+    ports:
+      - "5000:5000"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+      - MLFLOW_S3_ENDPOINT_URL=${MLFLOW_S3_ENDPOINT_URL}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - mlruns:/mlruns
+      - artifacts:/artifacts
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
+  # Prefect Server
+  prefect-server:
+    image: prefecthq/prefect:2-python3.9
+    ports:
+      - "4200:4200"
+    command: prefect server start
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
+  # FastAPI Application
+  ml-api:
+    build:
+      context: .
+      dockerfile: infrastructure/Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow-tracking:5000
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    depends_on:
+      - mlflow-tracking
+      - prefect-server
+    networks:
+      - mlops-network
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+
+  # Monitoring Dashboard
+  monitoring:
+    build:
+      context: .
+      dockerfile: infrastructure/Dockerfile.monitoring
+    ports:
+      - "8501:8501"
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
+  # Nginx Load Balancer
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - ml-api
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
+networks:
+  mlops-network:
+    driver: bridge
+
+volumes:
+  mlruns:
+  artifacts:

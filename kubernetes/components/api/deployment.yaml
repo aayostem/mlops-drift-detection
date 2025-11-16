@@ -1,0 +1,154 @@
+# kubernetes/components/api/deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-model-api
+  namespace: ml-platform
+  labels:
+    app: ml-model-api
+    component: model-serving
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ml-model-api
+      component: model-serving
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 25%
+  template:
+    metadata:
+      labels:
+        app: ml-model-api
+        component: model-serving
+        version: "v1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+        consul.hashicorp.com/connect-inject: "true"
+    spec:
+      serviceAccountName: ml-workloads
+      containers:
+      - name: model-api
+        image: ${DOCKER_REGISTRY}/ml-model-api:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: MLFLOW_TRACKING_URI
+          value: "http://mlflow-service.mlflow:5000"
+        - name: MODEL_NAME
+          value: "breast-cancer-classifier"
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: url
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 10
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+        - name: tmp-volume
+          mountPath: /tmp
+      - name: model-cache
+        image: redis:7-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 6379
+          name: redis
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: config-volume
+        configMap:
+          name: model-api-config
+      - name: tmp-volume
+        emptyDir: {}
+      - name: redis-data
+        emptyDir: {}
+      nodeSelector:
+        workload: ml
+      tolerations:
+      - key: "workload"
+        operator: "Equal"
+        value: "ml"
+        effect: "NoSchedule"
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - ml-model-api
+              topologyKey: "kubernetes.io/hostname"
+---
+# Vertical Pod Autoscaler
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: ml-model-api-vpa
+  namespace: ml-platform
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: ml-model-api
+  updatePolicy:
+    updateMode: "Auto"

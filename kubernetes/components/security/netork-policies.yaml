@@ -1,0 +1,107 @@
+# kubernetes/components/security/network-policies.yaml
+
+# Default deny all ingress traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: ml-platform
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+
+# Allow internal communication within ML platform
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-internal-ml-platform
+  namespace: ml-platform
+spec:
+  podSelector: {}
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ml-platform
+    - podSelector: {}
+  policyTypes:
+  - Ingress
+
+# Allow MLflow to access database
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-mlflow-to-database
+  namespace: ml-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: postgresql
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: mlflow
+    ports:
+    - protocol: TCP
+      port: 5432
+
+# Allow API to access MLflow
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-mlflow
+  namespace: mlflow
+spec:
+  podSelector:
+    matchLabels:
+      app: mlflow
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ml-platform
+      podSelector:
+        matchLabels:
+          app: ml-model-api
+    ports:
+    - protocol: TCP
+      port: 5000
+
+# Allow monitoring to scrape metrics
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scraping
+  namespace: ml-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: ml-model-api
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+    - protocol: TCP
+      port: 8000
+
+# Deny external traffic except through ingress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-external-to-pods
+  namespace: ml-platform
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system

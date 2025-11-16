@@ -1,0 +1,55 @@
+# kubernetes/components/mlflow/service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow-service
+  namespace: mlflow
+  labels:
+    app: mlflow
+    component: tracking-server
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  selector:
+    app: mlflow
+    component: tracking-server
+  ports:
+  - port: 80
+    targetPort: 5000
+    protocol: TCP
+    name: http
+  type: LoadBalancer
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mlflow-ingress
+  namespace: mlflow
+  annotations:
+    kubernetes.io/ingress.class: "alb"
+    alb.ingress.kubernetes.io/scheme: "internet-facing"
+    alb.ingress.kubernetes.io/target-type: "ip"
+    alb.ingress.kubernetes.io/healthcheck-path: "/health"
+    alb.ingress.kubernetes.io/healthcheck-port: "5000"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/certificate-arn: "${ACM_CERTIFICATE_ARN}"
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+spec:
+  rules:
+  - host: "mlflow.${DOMAIN_NAME}"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: mlflow-service
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - "mlflow.${DOMAIN_NAME}"
+    secretName: mlflow-tls

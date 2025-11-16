@@ -1,0 +1,3 @@
+[console_scripts]
+mlops-api = src.api.main:app
+mlops-dashboard = src.monitoring.dashboard:main

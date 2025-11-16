@@ -1,0 +1,76 @@
+# kubernetes/components/api/service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-model-api-service
+  namespace: ml-platform
+  labels:
+    app: ml-model-api
+    component: model-serving
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/metrics"
+spec:
+  selector:
+    app: ml-model-api
+    component: model-serving
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP
+    name: metrics
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ml-model-api-ingress
+  namespace: ml-platform
+  annotations:
+    kubernetes.io/ingress.class: "alb"
+    alb.ingress.kubernetes.io/scheme: "internet-facing"
+    alb.ingress.kubernetes.io/target-type: "ip"
+    alb.ingress.kubernetes.io/healthcheck-path: "/health"
+    alb.ingress.kubernetes.io/healthcheck-port: "8000"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/certificate-arn: "${ACM_CERTIFICATE_ARN}"
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/load-balancer-attributes: "routing.http2.enabled=true"
+    alb.ingress.kubernetes.io/actions.response-503: |
+      {"type":"fixed-response","fixedResponseConfig":{"contentType":"text/plain","statusCode":"503","messageBody":"Service unavailable"}}
+spec:
+  rules:
+  - host: "api.${DOMAIN_NAME}"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ml-model-api-service
+            port:
+              number: 80
+      - path: /predict
+        pathType: Prefix
+        backend:
+          service:
+            name: ml-model-api-service
+            port:
+              number: 80
+      - path: /health
+        pathType: Exact
+        backend:
+          service:
+            name: ml-model-api-service
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - "api.${DOMAIN_NAME}"
+    secretName: ml-api-tls

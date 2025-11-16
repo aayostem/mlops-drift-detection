@@ -1,0 +1,86 @@
+# tekton/tasks/model-training.yaml
+
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: model-training
+  namespace: tekton-pipelines
+spec:
+  workspaces:
+  - name: source
+    description: Workspace containing training code
+  - name: artifacts
+    description: Workspace for storing model artifacts
+  - name: docker-config
+    description: Workspace containing Docker configuration
+
+  params:
+  - name: experiment-name
+    type: string
+    description: MLflow experiment name
+  - name: model-name
+    type: string
+    description: Name of the model
+  - name: model-version
+    type: string
+    description: Version of the model
+  - name: mlflow-tracking-uri
+    type: string
+    description: MLflow tracking server URI
+
+  steps:
+  - name: setup-environment
+    image: python:3.9-slim
+    script: |
+      #!/bin/sh
+      pip install --upgrade pip
+      pip install -r $(workspaces.source.path)/requirements.txt
+      pip install mlflow boto3 scikit-learn pandas numpy
+
+  - name: train-model
+    image: python:3.9-slim
+    env:
+    - name: MLFLOW_TRACKING_URI
+      value: "$(params.mlflow-tracking-uri)"
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: aws-credentials
+          key: access-key-id
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: aws-credentials
+          key: secret-access-key
+    script: |
+      #!/bin/sh
+      cd $(workspaces.source.path)
+      
+      python train_model.py \
+        --experiment-name "$(params.experiment-name)" \
+        --model-name "$(params.model-name)" \
+        --model-version "$(params.model-version)" \
+        --output-path "$(workspaces.artifacts.path)/model"
+      
+      # Get the model URI from MLflow
+      MODEL_URI=$(python -c "
+      import mlflow
+      client = mlflow.tracking.MlflowClient()
+      latest_version = client.get_latest_versions('$(params.model-name)', stages=['None'])[0]
+      print(f'models:/{latest_version.name}/{latest_version.version}')
+      ")
+      
+      echo "Model URI: $MODEL_URI"
+      echo "$MODEL_URI" > $(workspaces.artifacts.path)/model_uri.txt
+
+  - name: save-artifacts
+    image: alpine:latest
+    script: |
+      #!/bin/sh
+      cp -r $(workspaces.source.path)/model/* $(workspaces.artifacts.path)/
+      ls -la $(workspaces.artifacts.path)
+
+  results:
+  - name: model-uri
+    description: MLflow model URI
+    value: $(steps.train-model.results.model-uri)

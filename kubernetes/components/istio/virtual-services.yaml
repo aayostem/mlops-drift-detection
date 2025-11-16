@@ -1,0 +1,80 @@
+# kubernetes/components/istio/virtual-services.yaml
+
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ml-model-api
+  namespace: ml-platform
+spec:
+  hosts:
+  - ml-model-api-service.ml-platform.svc.cluster.local
+  - api.mlplatform.company.com
+  http:
+  # Main routing with retries
+  - match:
+    - headers:
+        x-canary:
+          exact: "false"
+    route:
+    - destination:
+        host: ml-model-api-service.ml-platform.svc.cluster.local
+        subset: stable
+      weight: 90
+    - destination:
+        host: ml-model-api-service.ml-platform.svc.cluster.local
+        subset: canary
+      weight: 10
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+      retryOn: connect-failure,refused-stream,unavailable,cancelled,resource-exhausted
+  
+  # Canary testing route
+  - match:
+    - headers:
+        x-canary:
+          exact: "true"
+    route:
+    - destination:
+        host: ml-model-api-service.ml-platform.svc.cluster.local
+        subset: canary
+  
+  # Fault injection for testing
+  - fault:
+      delay:
+        percentage:
+          value: 5
+        fixedDelay: 1s
+    route:
+    - destination:
+        host: ml-model-api-service.ml-platform.svc.cluster.local
+        subset: stable
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ml-model-api
+  namespace: ml-platform
+spec:
+  host: ml-model-api-service.ml-platform.svc.cluster.local
+  subsets:
+  - name: stable
+    labels:
+      version: "v1.0.0"
+  - name: canary
+    labels:
+      version: "v1.1.0"
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 30ms
+      http:
+        http1MaxPendingRequests: 50
+        maxRequestsPerConnection: 10
+    outlierDetection:
+      consecutive5xxErrors: 10
+      interval: 5s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50

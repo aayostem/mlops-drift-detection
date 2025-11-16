@@ -1,0 +1,148 @@
+# kubernetes/components/mlflow/deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow-tracking-server
+  namespace: mlflow
+  labels:
+    app: mlflow
+    component: tracking-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mlflow
+      component: tracking-server
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: mlflow
+        component: tracking-server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ml-workloads
+      containers:
+      - name: mlflow-server
+        image: mlflow:2.8.1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+          name: http
+        env:
+        - name: MLFLOW_TRACKING_URI
+          value: "postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:5432/mlflow"
+        - name: MLFLOW_ARTIFACT_ROOT
+          value: "s3://${S3_BUCKET}/mlflow/"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: secret-access-key
+        - name: AWS_DEFAULT_REGION
+          value: "us-west-2"
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: mlflow-config
+              key: db-host
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: password
+        command:
+        - mlflow
+        args:
+        - server
+        - --host
+        - "0.0.0.0"
+        - --port
+        - "5000"
+        - --backend-store-uri
+        - "postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:5432/mlflow"
+        - --default-artifact-root
+        - "s3://${S3_BUCKET}/mlflow/"
+        - --gunicorn-opts
+        - "--log-level=info --access-logfile=- --error-logfile=-"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 10
+      nodeSelector:
+        workload: ml
+      tolerations:
+      - key: "workload"
+        operator: "Equal"
+        value: "ml"
+        effect: "NoSchedule"
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: mlflow-hpa
+  namespace: mlflow
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: mlflow-tracking-server
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

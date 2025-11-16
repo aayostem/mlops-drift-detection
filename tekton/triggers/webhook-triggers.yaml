@@ -1,0 +1,105 @@
+# tekton/triggers/webhook-triggers.yaml
+
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: ml-platform-webhook
+  namespace: tekton-pipelines
+spec:
+  serviceAccountName: tekton-triggers-admin
+  triggers:
+  - name: ml-training-trigger
+    interceptors:
+    - ref:
+        name: "github"
+      params:
+      - name: "secretRef"
+        value:
+          secretName: github-webhook-secret
+          secretKey: token
+      - name: "eventTypes"
+        value: ["push"]
+    bindings:
+    - ref: ml-training-binding
+    template:
+      ref: ml-training-template
+
+  - name: model-deployment-trigger
+    interceptors:
+    - ref:
+        name: "cel"
+      params:
+      - name: "filter"
+        value: "body.action == 'closed' && body.pull_request.merged == true"
+    - ref:
+        name: "github"
+      params:
+      - name: "secretRef"
+        value:
+          secretName: github-webhook-secret
+          secretKey: token
+    bindings:
+    - ref: model-deployment-binding
+    template:
+      ref: model-deployment-template
+
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: ml-training-binding
+  namespace: tekton-pipelines
+spec:
+  params:
+  - name: git-repository-url
+    value: $(body.repository.url)
+  - name: git-revision
+    value: $(body.after)
+  - name: git-branch
+    value: $(body.ref)
+  - name: commit-message
+    value: $(body.head_commit.message)
+
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: ml-training-template
+  namespace: tekton-pipelines
+spec:
+  params:
+  - name: git-repository-url
+    description: Git repository URL
+  - name: git-revision
+    description: Git revision
+  - name: git-branch
+    description: Git branch
+  - name: commit-message
+    description: Git commit message
+
+  resourcetemplates:
+  - apiVersion: tekton.dev/v1beta1
+    kind: PipelineRun
+    metadata:
+      generateName: ml-training-pipeline-run-
+      namespace: tekton-pipelines
+    spec:
+      pipelineRef:
+        name: ml-training-pipeline
+      workspaces:
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: training-data-pvc
+      - name: model-artifacts
+        persistentVolumeClaim:
+          claimName: model-artifacts-pvc
+      - name: docker-config
+        secret:
+          secretName: docker-config
+      params:
+      - name: model-name
+        value: "breast-cancer-classifier"
+      - name: model-version
+        value: "v1.0.0"
+      - name: experiment-name
+        value: "production"

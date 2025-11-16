@@ -1,0 +1,33 @@
+# kubernetes/base/namespaces.yaml
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ml-platform
+  labels:
+    name: ml-platform
+    environment: base
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlflow
+  labels:
+    name: mlflow
+    component: model-registry
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    name: monitoring
+    component: observability
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: logging
+  labels:
+    name: logging
+    component: logging

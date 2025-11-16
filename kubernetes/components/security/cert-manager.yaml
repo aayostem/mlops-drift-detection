@@ -1,0 +1,54 @@
+# kubernetes/components/security/cert-manager.yaml
+
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: security@mlplatform.company.com
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: alb
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ml-platform-tls
+  namespace: ml-platform
+spec:
+  secretName: ml-platform-tls
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  commonName: api.mlplatform.company.com
+  dnsNames:
+  - api.mlplatform.company.com
+  - mlflow.mlplatform.company.com
+  - grafana.mlplatform.company.com
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-tls
+  namespace: vault
+spec:
+  secretName: vault-tls
+  duration: 2160h
+  renewBefore: 360h
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  commonName: vault.mlplatform.company.com
+  dnsNames:
+  - vault.mlplatform.company.com
+  - vault.ml-platform.svc
+  - vault.ml-platform.svc.cluster.local

@@ -1,0 +1,136 @@
+# observability/prometheus/alerting-rules/ml-platform-rules.yml
+
+groups:
+- name: ml-platform-alerts
+  rules:
+  
+  # Model Performance Alerts
+  - alert: ModelAccuracyDegradation
+    expr: |
+      (
+        avg_over_time(model_accuracy[1h]) 
+        < 
+        avg_over_time(model_accuracy[1h] offset 1d)
+        * 0.95
+      )
+      and
+      (
+        avg_over_time(model_accuracy[1h]) < 0.85
+      )
+    for: 30m
+    labels:
+      severity: critical
+      component: model-performance
+      team: ml-platform
+    annotations:
+      summary: "Model accuracy degradation detected"
+      description: |
+        Model accuracy has degraded by more than 5% compared to yesterday and is below 85%.
+        Current: {{ $value | humanizePercentage }}
+        Reference: {{ printf "%.2f" (mul (avg_over_time model_accuracy[1h] offset 1d) 100) }}%
+
+  - alert: HighModelInferenceLatency
+    expr: |
+      histogram_quantile(0.95, rate(model_inference_duration_seconds_bucket[5m])) > 1
+    for: 10m
+    labels:
+      severity: warning
+      component: model-serving
+    annotations:
+      summary: "High model inference latency detected"
+      description: "P95 inference latency is {{ $value }} seconds"
+
+  # Data Drift Alerts
+  - alert: DataDriftDetected
+    expr: |
+      drift_score > 0.7
+    for: 15m
+    labels:
+      severity: critical
+      component: data-quality
+    annotations:
+      summary: "Data drift detected in production"
+      description: "Data drift score {{ $value }} exceeds threshold for 15 minutes"
+
+  - alert: FeatureDriftDetected
+    expr: |
+      feature_drift_score > 0.8
+    for: 10m
+    labels:
+      severity: warning
+      component: data-quality
+    annotations:
+      summary: "Feature drift detected"
+      description: "Feature {{ $labels.feature }} drift score {{ $value }} exceeds threshold"
+
+  # Concept Drift Alerts
+  - alert: ConceptDriftDetected
+    expr: |
+      (
+        avg_over_time(model_prediction_confidence[1h]) 
+        < 
+        avg_over_time(model_prediction_confidence[1h] offset 1d)
+        * 0.9
+      )
+    for: 1h
+    labels:
+      severity: critical
+      component: model-performance
+    annotations:
+      summary: "Concept drift suspected"
+      description: "Model prediction confidence dropped by more than 10% compared to yesterday"
+
+  # Resource Alerts
+  - alert: ModelAPIMemoryPressure
+    expr: |
+      container_memory_usage_bytes{container="model-api"} 
+      / 
+      container_spec_memory_limit_bytes{container="model-api"} > 0.9
+    for: 5m
+    labels:
+      severity: warning
+      component: infrastructure
+    annotations:
+      summary: "Model API memory pressure"
+      description: "Memory usage is {{ $value | humanizePercentage }} of limit"
+
+  - alert: GPUUtilizationHigh
+    expr: |
+      DCGM_FI_DEV_GPU_UTIL > 90
+    for: 10m
+    labels:
+      severity: warning
+      component: infrastructure
+    annotations:
+      summary: "High GPU utilization"
+      description: "GPU utilization is {{ $value }}% for device {{ $labels.gpu }}"
+
+  # Business Metrics Alerts
+  - alert: HighPredictionFailureRate
+    expr: |
+      rate(model_predictions_failed_total[10m]) 
+      / 
+      rate(model_predictions_total[10m]) > 0.05
+    for: 5m
+    labels:
+      severity: critical
+      component: business-metrics
+    annotations:
+      summary: "High prediction failure rate"
+      description: "Prediction failure rate is {{ $value | humanizePercentage }}"
+
+  - alert: ModelThroughputDegradation
+    expr: |
+      (
+        rate(model_predictions_total[10m]) 
+        < 
+        rate(model_predictions_total[10m] offset 1d)
+        * 0.7
+      )
+    for: 15m
+    labels:
+      severity: warning
+      component: business-metrics
+    annotations:
+      summary: "Model throughput degradation"
+      description: "Model prediction throughput dropped by more than 30% compared to yesterday"
