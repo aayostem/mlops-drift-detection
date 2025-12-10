@@ -3,6 +3,9 @@ from prefect import flow
 from data.pipeline import data_pipeline_flow
 from models.training import train_and_evaluate_models, register_model_in_registry
 from monitoring.drift import setup_drift_monitoring
+
+# from prefect.blocks.system import JSON
+from prefect.blocks.system import Secret
 import mlflow
 
 

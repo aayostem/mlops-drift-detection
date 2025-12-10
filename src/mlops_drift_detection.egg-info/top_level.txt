@@ -1,4 +1,10 @@
+api
 config
 data
-model
-pipeline
+explainability
+fairness
+feature_store
+models
+monitoring
+optimization
+pipelines
