@@ -1,56 +1,324 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
 [project]
 name = "mlops-drift-detection"
-version = "1.0.0"
-description = "Enterprise-grade MLOps pipeline with drift detection"
-authors = [{name = "Your Name", email = "your.email@example.com"}]
+description = "Enterprise MLOps Platform with Advanced Drift Detection"
 readme = "README.md"
-requires-python = ">=3.9"
 license = {text = "MIT"}
-
-dependencies = [
-    # Core ML - these work well with pip
-    "scikit-learn>=1.3.0",
-    "pandas>=2.0.3",
-    "numpy>=1.24.3",
-    "scipy>=1.10.1",
-    
-    # MLOps tools
-    "mlflow>=2.8.1",
-    "prefect>=2.10.5", 
-    "evidently>=0.4.8",
-    
-    # API & Web
-    "fastapi>=0.104.1",
-    "uvicorn[standard]>=0.24.0",
-    "pydantic>=2.5.0",
-    "streamlit>=1.28.0",
+authors = [
+    {name = "ML Platform Team", email = "ml-platform@example.com"},
 ]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: OS Independent",
+]
+keywords = ["mlops", "drift-detection", "machine-learning", "mlflow", "prefect"]
+requires-python = ">=3.9"
+dependencies = [
+    "prefect>=2.10.0",
+    "mlflow>=2.7.0",
+    "scikit-learn>=1.3.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.4.0",
+    "evidently>=0.4.0",
+    "streamlit>=1.28.0",
+    "joblib>=1.3.0",
+    "python-multipart>=0.0.6",
+    "prometheus-client>=0.19.0",
+    "plotly>=5.18.0",
+    "seaborn>=0.13.0",
+    "httpx>=0.25.0",
+    "python-dotenv>=1.0.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.12.0",
+    "psycopg2-binary>=2.9.0; platform_system != 'Windows'",
+    "psycopg2>=2.9.0; platform_system == 'Windows'",
+    "redis>=5.0.0",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/your-org/mlops-drift-detection-platform"
+Documentation = "https://your-org.github.io/mlops-drift-detection-platform"
+Repository = "https://github.com/your-org/mlops-drift-detection-platform.git"
+Issues = "https://github.com/your-org/mlops-drift-detection-platform/issues"
+Changelog = "https://github.com/your-org/mlops-drift-detection-platform/releases"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.4.2",
-    "pytest-asyncio>=0.21.1",
+    "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
-    "black>=23.9.0",
-    "isort>=5.12.0",
-    "flake8>=6.1.0",
-    "mypy>=1.6.0",
-    "pre-commit>=3.4.0",
-]
-notebooks = [
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-xdist>=3.5.0",
+    "pytest-html>=4.0.0",
+    "black>=23.11.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+    "pre-commit>=3.5.0",
     "jupyter>=1.0.0",
+    "ipython>=8.17.0",
+    "ipykernel>=6.25.0",
     "jupyterlab>=4.0.0",
-    "matplotlib>=3.7.0",
-    "seaborn>=0.12.0",
+    "pdoc>=13.1.0",
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.4.0",
+    "mkdocstrings[python]>=0.24.0",
+]
+docker = [
+    "gunicorn>=21.2.0",
+    "celery>=5.3.0",
+    "flower>=2.0.0",
+    "influxdb-client>=1.36.0",
+    "grafana-client>=3.7.0",
+]
+security = [
+    "bandit>=1.7.5",
+    "safety>=2.3.0",
+    "semgrep>=1.30.0",
+]
+monitoring = [
+    "opentelemetry-api>=1.21.0",
+    "opentelemetry-sdk>=1.21.0",
+    "opentelemetry-instrumentation-fastapi>=0.42.0",
+    "opentelemetry-exporter-prometheus>=0.42.0",
 ]
 
 [project.scripts]
-mlops-api = "src.api.main:app"
-mlops-dashboard = "src.monitoring.dashboard:main"
+mlops-api = "src.api.main:main"
+mlops-train = "src.pipelines.training_pipeline:main"
+mlops-monitor = "src.monitoring.dashboard:main"
+mlops-cli = "src.cli:app"
 
-# Tool configurations (black, pytest, etc.) remain the same
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
 [tool.black]
 line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.git
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+    | \.ipynb_checkpoints
+    | \.pytest_cache
+    | \.ruff_cache
+)/
+'''
+
+[tool.ruff]
+target-version = "py39"
+line-length = 88
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "S",   # flake8-bandit (security)
+    "ARG", # flake8-unused-arguments
+    "ASYNC", # flake8-async
+    "DTZ", # flake8-datetimez
+    "EM",  # flake8-errmsg
+    "FIX", # flake8-fixme
+    "ICN", # flake8-import-conventions
+    "ISC", # flake8-implicit-str-concat
+    "N",   # pep8-naming
+    "PD",  # pandas-vet
+    "PGH", # pygrep-hooks
+    "PIE", # flake8-pie
+    "PL",  # pylint
+    "PT",  # flake8-pytest-style
+    "Q",   # flake8-quotes
+    "RUF", # ruff-specific
+    "SIM", # flake8-simplify
+    "T20", # flake8-print
+    "TID", # flake8-tidy-imports
+    "TRY", # tryceratops
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "S101",  # use of assert detected
+    "PLR2004", # magic value used in comparison
+    "PLW0603", # using the global statement
+    "TRY003", # avoid specifying long messages outside the exception class
+]
+unfixable = [
+    "F401",  # unused import
+    "F841",  # unused variable
+]
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "build",
+    "dist",
+    "node_modules",
+    "*.pyi",
+]
+isort = {known-first-party = ["src"]}
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+show_error_codes = true
+enable_error_code = [
+    "ignore-without-code",
+    "redundant-expr",
+    "truthy-bool",
+    "truthy-iterable",
+]
+plugins = [
+    "pydantic.mypy"
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "pandas.*",
+    "numpy.*",
+    "sklearn.*",
+    "mlflow.*",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
+minversion = "7.0"
+addopts = """
+    -v
+    --strict-markers
+    --strict-config
+    --durations=10
+    --cov=src
+    --cov-report=html
+    --cov-report=term-missing:skip-covered
+    --cov-fail-under=80
+    --failed-first
+    --new-first
+"""
 testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: unit tests",
+    "integration: integration tests",
+    "slow: slow running tests",
+    "docker: tests requiring docker",
+    "e2e: end-to-end tests",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore::FutureWarning",
+]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/__pycache__/*",
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+    "src/__version__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+fail_under = 80
+
+[tool.mkdocs]
+site_name = "MLOps Drift Detection Platform"
+site_description = "Enterprise MLOps Platform Documentation"
+site_url = "https://your-org.github.io/mlops-drift-detection-platform/"
+repo_url = "https://github.com/your-org/mlops-drift-detection-platform/"
+repo_name = "mlops-drift-detection-platform"
+
+theme = {name = "material"}
+plugins = ["mkdocstrings", "search"]
+extra_css = ["stylesheets/extra.css"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.poetry]
+name = "mlops-drift-detection"
+version = "0.1.0"
+description = "Enterprise MLOps Platform with Advanced Drift Detection"
+authors = ["ML Platform Team <ml-platform@example.com>"]
+readme = "README.md"
+license = "MIT"
+packages = [{include = "src", from = "."}]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.group.dev.dependencies]
+# Same as [project.optional-dependencies.dev]
